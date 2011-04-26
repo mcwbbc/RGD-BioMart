@@ -50,7 +50,8 @@ sub connectSQL
 {
 	my $db = shift;
 	my $dsn = "dbi:$dbtype:$db:$host:$port";
-	my $dbh = DBI->connect( $dsn, $username, $passwd )
+	my $dbh = DBI->connect( $dsn, $user, $pwd );
+	return $dbh;
 }
 
 1;
