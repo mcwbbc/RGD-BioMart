@@ -146,14 +146,8 @@ print @results;
 ####End fetching data######################
 
 ####Create database connection#############
-my $dbtype = "mysql";
-# use DBINFO.pm to store information
-my $username = DBINFO::getMySqlUser();
-my $passwd = DBINFO::getMySqlPwd();
-my $port = DBINFO::getMySqlPort();
-my $host = DBINFO::getMySqlHost();
-my $dsn = "dbi:$dbtype:$db:$host:$port";
-my $dbh = DBI->connect( $dsn, $username, $passwd )
+
+my $dbh = DBINFO::connectSQL($db)
    or RBC::reportError( "$localLog\nCould not connect to mysql database: $DBI::errstr\n", 'RGD Update' );
 
 ###Cleans existing databases################

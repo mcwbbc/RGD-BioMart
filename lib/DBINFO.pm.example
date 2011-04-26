@@ -1,0 +1,56 @@
+package DBINFO;
+
+=head1 DBINFO.pm
+
+###################################################
+#
+# DBINFO.pm
+# by Andrew Vallejos
+#
+# File to store database information for BioMart
+# databases.  Currently contains only information 
+# for our MySQL databases
+#
+####################################################
+#
+# Subroutines
+#
+#	connectSQL
+#	- creates a DBI connection to the database
+#	Arguments:
+#	- database to connect to
+#	Returns:
+#	- DBI connection
+#
+#	Must edit file to include your information
+#	so that Update scripts connect to your
+#	databases correctly
+#
+###################################################
+
+=cut
+
+################################################
+# Edit this information for your configuration #
+################################################
+
+my $dbtype = 'mysql';
+my $host = '';#DB host
+my $port = '';#Usually 3306 for mySQL databases
+my $user = '';#Enter your user name
+my $pwd = '';#Password for the above user
+
+
+###############################
+# End of information required #
+###############################
+
+
+sub connectSQL
+{
+	my $db = shift;
+	my $dsn = "dbi:$dbtype:$db:$host:$port";
+	my $dbh = DBI->connect( $dsn, $username, $passwd )
+}
+
+1;

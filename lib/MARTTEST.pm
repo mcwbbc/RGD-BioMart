@@ -12,7 +12,7 @@ package MARTTEST;
 #
 #####################
 
-use lib "/scratch3/biomart-web/updateScripts/lib";
+use lib "../lib";
 use DBI;
 use DBINFO;
 use strict;
@@ -26,19 +26,13 @@ sub testMart
 	my $database = shift(@inputs) or $fail = 1;
 	my $key = shift(@inputs) or $fail = 1;
 	
-	my $user = DBINFO::getMySqlUser();
-	my $pwd = DBINFO::getMySqlPwd();
-	my $host = DBINFO::getMySqlHost();
-	my $port = DBINFO::getMySqlPort();
-	
 	if($fail)
 	{
 		my $error = "Incorrect number of agruments!\n";
 		error($error);
 	}
 	
-	my $dsn = "dbi:mysql:$database:$host:$port";
-	my $dbh = DBI->connect($dsn, $user, $pwd)
+	my $dbh = DBINFO::connectSQL($database)
 		or $fail = 1;
 		
 	if ($fail)
