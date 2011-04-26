@@ -53,7 +53,7 @@ my $key = "rgd_id_key"; #used to test mart later
 my $db = $dbName;
 
 #location of Accessory files
-my $location = '/scratch3/biomart-web/updateScripts/rgd/';
+my $location = '../rgd/';
 my $slimFile = $location.'rgd_goslim.txt';
 my $prettyBiomart = $location.'rgd_clean_update.sql';
 my $doFile = $location.'rgd_do_obo.txt';
@@ -62,12 +62,12 @@ my $doFile = $location.'rgd_do_obo.txt';
 # Perl modules                  #
 #################################
 
-use lib "/scratch3/biomart-web/updateScripts/lib";
-
+use lib "../lib";
+use strict;
 
 ##End of Required Editing#######
 
-my $source = $locataion.'RGD';
+my $source = $location.'RGD';
 
 use LWP::UserAgent;
 use DBI;
@@ -81,7 +81,7 @@ my @testData; #used to query the db at the end
 
 
 my $baseDir = "ftp://rgd.mcw.edu/pub/data_release";
-my $genefile = '/GENES_RAT'; #modified for test set
+my $genefile = '/GENES_RAT.txt'; #modified for test set
 
 my $geneUrl = "$baseDir/$genefile";
 
@@ -94,7 +94,7 @@ my $mpAnnotUrl = "$baseDir/annotated_rgd_objects_by_ontology/rattus_genes_mp";
 my $mpUrl = "http://obo.cvs.sourceforge.net/*checkout*/obo/obo/ontology/phenotype/mammalian_phenotype.obo";
 
 my $pwAnnotUrl = "$baseDir/annotated_rgd_objects_by_ontology/rattus_genes_pw";
-my $pwUrl = "$baseDir/pathway.obo";
+my $pwUrl = "$baseDir/ontology_obo_files/pathway/pathway.obo";
 
 my $new = shift(@ARGV);
 if ($new eq 'new')
@@ -185,18 +185,19 @@ my %index;
 
 foreach(@lines)
 {
-   if($_ =~ /GENE_RGD_ID/)
-   {
-        #Looks for header line and parses out column information
-        my @header = split(/\t/, $_);
-        
-        for(my $i = 0; $i < @header; $i++)
-        {
-        	$index{$header[$i]} = $i;
-        }
-   }
-   else
-   {
+	next if /^#/;
+	if(/^GENE_RGD_ID/)
+	  	{
+	       #Looks for header line and parses out column information
+	       my @header = split(/\t/, $_);
+      
+	       for(my $i = 0; $i < @header; $i++)
+	       {
+	       	$index{$header[$i]} = $i;
+	       }
+   	}
+   	else
+   	{
 		my @info = split(/\t/, $_);
         push(@testData, $info[0]);
         my @sql;
@@ -208,17 +209,17 @@ foreach(@lines)
         $sql[0] .= qq~"$info[$index{GENE_DESC}]");~;
 
 		# UniProt Accession
-		my @uniprot = split(/,/,$info[$index{UNIPROT_ID}]);
+		my @uniprot = split(/[,;]/,$info[$index{UNIPROT_ID}]);
 		foreach my $entry (@uniprot)
 		{
 			my $x = qq~INSERT INTO rgd_genes__uniprot__dm ~;
 			$x .= qq~VALUES("$info[$index{GENE_RGD_ID}]","$entry");~;
 			push(@sql, $x);
-			
-		}
 		
+		}
+	
 		# genbank_nucleotide
-        my @nucleotide = split(/,/, $info[$index{GENBANK_NUCLEOTIDE}]);
+        my @nucleotide = split(/[,;]/, $info[$index{GENBANK_NUCLEOTIDE}]);
         foreach my $entry (@nucleotide)
         {
         	my $x = qq~INSERT INTO rgd_genes__accessions__dm ~;
@@ -227,7 +228,7 @@ foreach(@lines)
         }
 
 		# genbank_protein
-        my @protein = split(/,/, $info[$index{GENBANK_PROTEIN}]);
+        my @protein = split(/[,;]/, $info[$index{GENBANK_PROTEIN}]);
         foreach my $entry (@protein)
         {
         	my $x = qq~INSERT INTO rgd_genes__accessions__dm ~;
@@ -240,109 +241,104 @@ foreach(@lines)
 		$q .= qq~VALUES("$info[$index{GENE_RGD_ID}]","$info[$index{CHROMOSOME_31}]","",~;
 		$q .= qq~"$info[$index{GENE_TYPE}]","$info[$index{START_POS_31}]","$info[$index{STOP_POS_31}]",~;
 		$q .= qq~"$info[$index{STRAND_31}]","v3.1");~;
-		
+	
 		my $q1 = qq~INSERT INTO rgd_genes__map34__dm ~;
 		$q1 .= qq~VALUES("$info[$index{GENE_RGD_ID}]","$info[$index{CHROMOSOME_34}]","",~;
 		$q1 .= qq~"$info[$index{GENE_TYPE}]","$info[$index{START_POS_34}]","$info[$index{STOP_POS_34}]",~;
 		$q1 .= qq~"$info[$index{STRAND_34}]","v3.4");~;
-		
+	
 		push(@sql, $q, $q1);
-		
+	
         foreach my $i (@sql)
         {  $dbh->do($i)
         	or RBC::reportError($localLog.$_.$DBI::errstr, "RGD Update");
 		}
-   }
-}
+   } #end if-else
+} #end foreach
 
 ###GO Annotation##############################
 my $annotFile = "annotation";
 
-open(ZIP, ">$annotFile.gz");
-print ZIP "$annot";
-close ZIP;
+open(my $ZIP, ">", "$annotFile.gz");
+print $ZIP "$annot";
+close $ZIP;
 
 qx(gzip -d $annotFile.gz);
 
-open(IN, "$annotFile");
+open(my $GOA, '<', $annotFile);
 
 my %idToTerm;
-while(<IN>)
+while(<$GOA>)
 {
 	chomp;
     my $line = $_;
     my $sql;
-    if($line =~ /^!/)
-    {    	#skip this line
-    }
-    else
+
+    next if($line =~ /^!/);
+
+    my @data = split(/\t/, $line);
+    my $rgdId = $data[1];
+    my $qual = $data[3];
+    my $GO_id = $data[4];
+    my @temp = split(/\|/, $data[5]);
+    my $ref = substr($temp[0], 4);
+    my $evid = $data[6];
+    my $wf = $data[7];
+    my $aspect = $data[8];
+
+    if(!exists($idToTerm{$GO_id}))
     {
-        my @data = split(/\t/, $line);
-        my $rgdId = $data[1];
-        my $qual = $data[3];
-        my $GO_id = $data[4];
-        my @temp = split(/\|/, $data[5]);
-        my $ref = substr($temp[0], 4);
-        my $evid = $data[6];
-        my $wf = $data[7];
-        my $aspect = $data[8];
-
-        if(!exists($idToTerm{$GO_id}))
-        {
-        	$go =~ m|$GO_id\t([\w, \(\)\-]+)|;
-        	$idToTerm{$GO_id} = $1;
-        }
-        my $goTerm = $idToTerm{$GO_id};
-
-        $sql = qq~INSERT INTO rgd_genes__geneontology__dm ~;
-        $sql .= qq~VALUES("$rgdId","$qual","$GO_id","$goTerm","$ref","$evid",~;
-        $sql .= qq~"$wf","$aspect");~;
-
-        $dbh->do($sql)
-        	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
-
+    	$go =~ m|$GO_id\t([\w, \(\)\-]+)|;
+    	$idToTerm{$GO_id} = $1;
     }
+    my $goTerm = $idToTerm{$GO_id};
+
+    $sql = qq~INSERT INTO rgd_genes__geneontology__dm ~;
+    $sql .= qq~VALUES("$rgdId","$qual","$GO_id","$goTerm","$ref","$evid",~;
+    $sql .= qq~"$wf","$aspect");~;
+
+    $dbh->do($sql)
+    	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
+
+
 }
-close IN;
+close $GOA;
 qx(gzip $annotFile);
 ###End GO Annotation#####################
 
-open(IN, "$slimFile");
+open(my $SLIM, '<', "$slimFile");
 
 foreach my $key (keys(%idToTerm))
 {	delete($idToTerm{$key});	}
 
 ###GO Slim Annotation####################
-while(<IN>)
+while(<$SLIM>)
 {
 	chomp;
     my $line = $_;
     my $sql;
-    if($line =~ /^!/)
-    {    	#skip this line
-    }
-    else
+
+    next if($line =~ /^!/);
+
+    my @data = split(/\t/, $line);
+    my $rgdId = substr($data[1], 4);
+    my $GO_id = $data[4];
+
+    if(!exists($idToTerm{$GO_id}))
     {
-        my @data = split(/\t/, $line);
-        my $rgdId = substr($data[1], 4);
-        my $GO_id = $data[4];
-
-        if(!exists($idToTerm{$GO_id}))
-        {
-        	$go =~ m|$GO_id\t([\w, \(\)\-]+)|;
-        	$idToTerm{$GO_id} = $1;
-        }
-        my $goTerm = $idToTerm{$GO_id};
-
-        $sql = qq~INSERT INTO rgd_genes__geneontology_slim__dm ~;
-        $sql .= qq~VALUES("$rgdId","$GO_id","$goTerm");~;
-
-        $dbh->do($sql)
-        	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
-
+    	$go =~ m|$GO_id\t([\w, \(\)\-]+)|;
+    	$idToTerm{$GO_id} = $1;
     }
+    my $goTerm = $idToTerm{$GO_id};
+
+    $sql = qq~INSERT INTO rgd_genes__geneontology_slim__dm ~;
+    $sql .= qq~VALUES("$rgdId","$GO_id","$goTerm");~;
+
+    $dbh->do($sql)
+    	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
+
 }
-close IN;
+close $SLIM;
 
 ###End GO Slim Annotation################
 
@@ -352,55 +348,53 @@ foreach my $key (keys(%idToTerm))
 ###Disease Annotation####################
 my $doAnnotFile = "$location/diseaseAnnotation.txt";
 
-open(OUT, ">$doAnnotFile");
-print OUT $doAnnot;
-close OUT;
+open(my $OUT, ">", "$doAnnotFile");
+print $OUT $doAnnot;
+close $OUT;
 
 my $doInfo = '';
 
-open(IN, "$doFile");
-while(<IN>) { $doInfo .= $_; }
-close IN;
+open(my $DOF, '<', "$doFile");
+while(<$DOF>) { $doInfo .= $_; }
+close $DOF;
 
-open(IN, "$doAnnotFile");
+open(my $DOA, '<', "$doAnnotFile");
 
-while(<IN>)
+while(<$DOA>)
 {
 	chomp;
     my $line = $_;
     my $sql;
-    if($line =~ /^!/)
-    {    	#skip this line
-    }
-    else
+
+    next if($line =~ /^!/); #skip comment lines
+
+    my @data = split(/\t/, $line);
+    my $rgdId = $data[1];
+    my $qual = $data[3];
+    my $DO_id = $data[4];
+    my @temp = split(/\|/, $data[5]);
+    my $ref = substr($temp[0], 4);
+    my $evid = $data[6];
+    my $wf = $data[7];
+    my $aspect = $data[8];
+
+    if(!exists($idToTerm{$DO_id}))
     {
-        my @data = split(/\t/, $line);
-        my $rgdId = $data[1];
-        my $qual = $data[3];
-        my $DO_id = $data[4];
-        my @temp = split(/\|/, $data[5]);
-        my $ref = substr($temp[0], 4);
-        my $evid = $data[6];
-        my $wf = $data[7];
-        my $aspect = $data[8];
-
-        if(!exists($idToTerm{$DO_id}))
-        {
-        	$doInfo =~ m|$DO_id\s+name: ([\w ,\-]+)|;
-        	$idToTerm{$DO_id} = $1;
-        }
-        my $doTerm = $idToTerm{$DO_id};
-
-        $sql = qq~INSERT INTO rgd_genes__diseaseontology__dm ~;
-        $sql .= qq~VALUES("$rgdId","$qual","$DO_id","$doTerm","$ref","$evid",~;
-        $sql .= qq~"$wf","$aspect");~;
-
-        $dbh->do($sql)
-        	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
-
+    	$doInfo =~ m|$DO_id\s+name: ([\w ,\-]+)|;
+    	$idToTerm{$DO_id} = $1;
     }
+    my $doTerm = $idToTerm{$DO_id};
+
+    $sql = qq~INSERT INTO rgd_genes__diseaseontology__dm ~;
+    $sql .= qq~VALUES("$rgdId","$qual","$DO_id","$doTerm","$ref","$evid",~;
+    $sql .= qq~"$wf","$aspect");~;
+
+    $dbh->do($sql)
+    	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
+
+
 }
-close IN;
+close $DOA;
 ###End Disease Annotation##################
 
 foreach my $key (keys(%idToTerm))
@@ -409,49 +403,45 @@ foreach my $key (keys(%idToTerm))
 ###Phenotype Annotation####################
 my $mpAnnotFile = "$location/phenotypeAnnotation.txt";
 
-open(OUT, ">$mpAnnotFile");
-print OUT $mpAnnot;
-close OUT;
+open(my $MAF, ">", $mpAnnotFile);
+print $MAF $mpAnnot;
+close $MAF;
 
-open(IN, "$mpAnnotFile");
+open(my $MPA, '<', $mpAnnotFile);
 
-while(<IN>)
+while(<$MPA>)
 {
 	chomp;
     my $line = $_;
     my $sql;
-    if($line =~ /^!/)
-    {    	#skip this line
-    }
-    else
+    next if($line =~ /^!/);
+
+    my @data = split(/\t/, $line);
+    my $rgdId = $data[1];
+    my $qual = $data[3];
+    my $MP_id = $data[4];
+    my @temp = split(/\|/, $data[5]);
+    my $ref = substr($temp[0], 4);
+    my $evid = $data[6];
+    my $wf = $data[7];
+    my $aspect = $data[8];
+
+    if(!exists($idToTerm{$MP_id}))
     {
-        my @data = split(/\t/, $line);
-        my $rgdId = $data[1];
-        my $qual = $data[3];
-        my $MP_id = $data[4];
-        my @temp = split(/\|/, $data[5]);
-        my $ref = substr($temp[0], 4);
-        my $evid = $data[6];
-        my $wf = $data[7];
-        my $aspect = $data[8];
-
-        if(!exists($idToTerm{$MP_id}))
-        {
-        	$mp =~ m|$MP_id\s+name: ([\w ,\-]+)|;
-        	$idToTerm{$MP_id} = $1;
-        }
-        my $mpTerm = $idToTerm{$MP_id};
-
-        $sql = qq~INSERT INTO rgd_genes__mpontology__dm ~;
-        $sql .= qq~VALUES("$rgdId","$qual","$MP_id","$mpTerm","$ref","$evid",~;
-        $sql .= qq~"$wf","$aspect");~;
-
-        $dbh->do($sql)
-        	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
-
+    	$mp =~ m|$MP_id\s+name: ([\w ,\-]+)|;
+    	$idToTerm{$MP_id} = $1;
     }
+    my $mpTerm = $idToTerm{$MP_id};
+
+    $sql = qq~INSERT INTO rgd_genes__mpontology__dm ~;
+    $sql .= qq~VALUES("$rgdId","$qual","$MP_id","$mpTerm","$ref","$evid",~;
+    $sql .= qq~"$wf","$aspect");~;
+
+    $dbh->do($sql)
+    	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
+
 }
-close IN;
+close $MPA;
 ###End Phenotype Annotation##################
 
 foreach my $key (keys(%idToTerm))
@@ -460,49 +450,45 @@ foreach my $key (keys(%idToTerm))
 ###Pathway Annotation####################
 my $pwAnnotFile = "$location/pathwayAnnotation.txt";
 
-open(OUT, ">$pwAnnotFile");
-print OUT $pwAnnot;
-close OUT;
+open(my $PWF, ">", $pwAnnotFile);
+print $PWF $pwAnnot;
+close $PWF;
 
-open(IN, "$pwAnnotFile");
+open(my $PWA, '<', $pwAnnotFile);
 
-while(<IN>)
+while(<$PWA>)
 {
 	chomp;
     my $line = $_;
     my $sql;
-    if($line =~ /^!/)
-    {    	#skip this line
-    }
-    else
+    next if($line =~ /^!/);
+
+    my @data = split(/\t/, $line);
+    my $rgdId = $data[1];
+    my $qual = $data[3];
+    my $PW_id = $data[4];
+    my @temp = split(/\|/, $data[5]);
+    my $ref = substr($temp[0], 4);
+    my $evid = $data[6];
+    my $wf = $data[7];
+    my $aspect = $data[8];
+
+    if(!exists($idToTerm{$PW_id}))
     {
-        my @data = split(/\t/, $line);
-        my $rgdId = $data[1];
-        my $qual = $data[3];
-        my $PW_id = $data[4];
-        my @temp = split(/\|/, $data[5]);
-        my $ref = substr($temp[0], 4);
-        my $evid = $data[6];
-        my $wf = $data[7];
-        my $aspect = $data[8];
-
-        if(!exists($idToTerm{$PW_id}))
-        {
-        	$pw =~ m|$PW_id\s+name: ([\w ,\-]+)|;
-        	$idToTerm{$PW_id} = $1;
-        }
-        my $pwTerm = $idToTerm{$PW_id};
-
-        $sql = qq~INSERT INTO rgd_genes__pwontology__dm ~;
-        $sql .= qq~VALUES("$rgdId","$qual","$PW_id","$pwTerm","$ref","$evid",~;
-        $sql .= qq~"$wf","$aspect");~;
-
-        $dbh->do($sql)
-        	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
-
+    	$pw =~ m|$PW_id\s+name: ([\w ,\-]+)|;
+    	$idToTerm{$PW_id} = $1;
     }
+    my $pwTerm = $idToTerm{$PW_id};
+
+    $sql = qq~INSERT INTO rgd_genes__pwontology__dm ~;
+    $sql .= qq~VALUES("$rgdId","$qual","$PW_id","$pwTerm","$ref","$evid",~;
+    $sql .= qq~"$wf","$aspect");~;
+
+    $dbh->do($sql)
+    	or RBC::reportError($localLog.$sql."\n\n".DBI::errstr, "RGD Update");
+
 }
-close IN;
+close $PWA;
 ###End Pathway Annotation##################
 
 ###########################################
@@ -680,6 +666,7 @@ sub dropTables
         {  $dbh->do($x);	}
 	
 }
+
 sub testDB
 {
 	my $results = '';
@@ -698,7 +685,3 @@ sub testDB
 
 	return $results;
 }
-
-__END__
-
-sub process_ID

@@ -1,3 +1,7 @@
 lib/DBINFO.pm
 untrackedFiles/
 .DS_Store
+*.txt
+*.gz
+RGDdate
+RGDindex

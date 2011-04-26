@@ -177,21 +177,25 @@ sub reportError
 
 sub send_mail {
    	my $sendmail = "/usr/lib/sendmail -t";
+	my $toAddresses = 'To: AVallejos@phys.mcw.edu,simont@hmgc.mcw.edu';
+	my $fromAddresses = 'From: avallejos@mcw.edu';
 	my $emailBody = shift;
 	my $emailSubject = shift;
-	my $email_message =  'To: AVallejos@phys.mcw.edu,simont@hmgc.mcw.edu'."\n".'From: avallejos@mcw.edu'.
+	my $email_message =  "$toAddresses\n $fromAdresses" .
 			  "\nSubject: $emailSubject\n".
 			  "$emailBody\n";
 
-	eval {
-	      open (MAIL,"|$sendmail") || die "Can't open sendmail: $!\n";
-	      print MAIL $email_message;
-	      close(MAIL);
-	};
-	if ($@) {
-	      return 0; # error from above eval - false value
+
+	if(open(MAIL, "|$sendmail"))
+	{
+		print MAIL $email_message;
+		close MAIL;
 	}
-	return 1;  # no error - true value
+	else
+	{
+		print $email_message;
+	}
+
 }
 
 sub getNextMart
