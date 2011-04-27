@@ -92,6 +92,9 @@ package RBC;
 
 require DBINFO;
 
+# Add admin emails if using email alerts
+my @emails = [];
+
 sub createNew
 {
 	my $name = shift;
@@ -177,8 +180,8 @@ sub reportError
 
 sub send_mail {
    	my $sendmail = "/usr/lib/sendmail -t";
-	my $toAddresses = 'To: AVallejos@phys.mcw.edu,simont@hmgc.mcw.edu';
-	my $fromAddresses = 'From: avallejos@mcw.edu';
+	my $toAddresses = 'To: ' . join(',', @emails);
+	my $fromAddresses = 'From: ' . $email[0];
 	my $emailBody = shift;
 	my $emailSubject = shift;
 	my $email_message =  "$toAddresses\n $fromAdresses" .

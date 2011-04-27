@@ -1,0 +1,48 @@
+RGD Rat BioMart README
+
+Purpose:
+To provide an automated script that would rebuild a new RatMart as data was 
+published by the Rat Genome Database (RGD).
+
+Use:
+In the rgd directory:
+
+perl mcwRGDUpdate.pl 
+
+or 
+
+perl mcwRGDUpdate.pl new
+
+The new argument is used either for an initial build or to force a rebuild, otherwise
+the script will automatically terminate unless it finds new data.
+
+Requirements:
+BioMart and all associated requirements
+And the following Perl modules
+- LWP::UserAgent
+- DBI
+- DBD for your database
+
+You should also create the following two databases (using BioMart's naming conventions):
+rgd__mart
+rgd_temp__mart
+
+Configuring the scripts:
+DNINFO.pm
+You will need to rename DBINFO.pm.example to DBINFO.pm and update the file
+with your database information.
+
+RBC.pm
+If you are using a system that supports sendmail you can add your administrators email
+addresses to the @emails array.  If your system does not support sendmail all messages
+will be sent via STDOUT.
+
+Data and Files:
+The script automatically downloads most of the information that is required, however there
+are two files included rgd_goslim.txt and rgd_do_obo.txt that are currently not publically
+available and necessary to build the Rat BioMart.
+
+The script also creates two files RGDdate and RGDindex which are used to store information;
+RGDdate, for example, contains the date of the last RGD FTP downloaded and compares that to
+the date on the current file to determine if a rebuild is necessary.
+
